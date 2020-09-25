@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>COVID-19 by Concelho</title>
+
+    <style>
+       div { font:17px 'Calibri'; }
+
+        table, th, td {
+            border: solid 1px #ddd;
+            border-collapse: collapse;
+            padding: 2px 3px;
+            text-align: center;
+        }
+        th {
+            font-weight:bold;
+        }
+        .highcharts-figure {
+            float: right;
+            width: 50em;
+        }
+    </style>
+
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/series-label.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+</head>
+<body>
+    <h3>
+    	Data extracted ARCGIS system.
+    </h3>
+    <div>
+        <select id="concelho" onchange="getData()">
+            <option>Aveiro</option>
+            <option>Almada</option>
+            <option selected="selected">Coimbra</option>
+            <option>Lisboa</option>
+            <option>Porto</option>
+            <option>Valongo</option>
+        </select>
+    </div>
+    <figure class="highcharts-figure">
+        <div id="container"></div>
+        <p class="highcharts-description">
+            Data
+        </p>
+    </figure>
+
+    <div id='showTable'></div>
+
+</body>
+
+<script>
+    // Create XMLHttpRequest object.
+    var oXHR = new XMLHttpRequest();
+    var concelho;
+    getData();
+
+    function getData()
+    {
+        var c = document.getElementById('concelho');
+        concelho = c.options[c.selectedIndex].text;
+
+        // Initiate request.
+        oXHR.onreadystatechange = reportStatus;
+        oXHR.open("GET", "https://services.arcgis.com/CCZiGSEQbAxxFVh3/ArcGIS/rest/services/COVID19_ConcelhosDiarios/FeatureServer/0/query?f=json&where=(Concelho='" + concelho + "')&returnGeometry=false&spatialRel=esriSpatialRelIntersects&outFields=ConfirmadosAcumulado,Data&orderByFields=Data%20DESC&outSR=102100&resultOffset=0&resultRecordCount=500&cacheHint=true", true);  // get json file.
+        oXHR.send();
+    }
+
+
+
+    function reportStatus() {
+        if (oXHR.readyState == 4) {		// Check if request is complete.
+
+            // Create an HTML table using response from server.
+            createTableFromJSON(this.responseText);
+        }
+    }
+
+    // Create an HTML table using the JSON data.
+    function createTableFromJSON(jsonData) {
+        var arrBirds = [];
+        arrBirds = JSON.parse(jsonData); 	// Convert JSON to array.
+        arrBirds = arrBirds['features'];
+
+        var col = ['Date','Value', 'Variation'];
+        
+
+        // Create a dynamic table.
+        var table = document.createElement("table");
+
+
+        // Create table header.
+
+        var tr = table.insertRow(-1);                   // Table row.
+
+        for (var i = 0; i < col.length; i++) {
+            var th = document.createElement("th");      // Table header.
+            th.innerHTML = col[i];
+            tr.appendChild(th);
+        }
+
+        var data = new Array();
+
+        // Add JSON to the table rows.
+        var previous = arrBirds[0]['attributes']['ConfirmadosAcumulado'];
+        for (var i = 0; i < arrBirds.length - 1; i++) {
+
+            tr = table.insertRow(-1);
+
+            var tabCell = tr.insertCell(-1);
+            var date = new Date(arrBirds[i]['attributes']['Data']);
+            tabCell.innerHTML = date.toDateString();
+            
+            tabCell = tr.insertCell(-1);
+            tabCell.innerHTML = arrBirds[i]['attributes']['ConfirmadosAcumulado'];
+			
+            tabCell = tr.insertCell(-1);
+            var variation = arrBirds[i]['attributes']['ConfirmadosAcumulado'] - arrBirds[i + 1]['attributes']['ConfirmadosAcumulado'];
+            tabCell.innerHTML = variation;
+
+            if(variation < 0) {
+                variation = 0;
+            }
+            data.push([arrBirds[i]['attributes']['Data'], variation]);
+        }
+
+        // Finally, add the dynamic table to a container.
+        var divContainer = document.getElementById("showTable");
+        divContainer.innerHTML = "";
+        divContainer.appendChild(table);
+
+        updateChart(data, concelho);
+    };
+
+    function updateChart(data, concelho)
+    {
+         Highcharts.chart('container', {
+            chart: {
+                zoomType: 'x'
+            },
+            title: {
+                text: 'Case Variation in ' + concelho
+            },
+            subtitle: {
+                text: document.ontouchstart === undefined ?
+                    'Click and drag in the plot area to zoom in' : 'Pinch the chart to zoom in'
+            },
+            xAxis: {
+                type: 'datetime'
+            },
+            yAxis: {
+                title: {
+                    text: 'Number cases'
+                }
+            },
+            legend: {
+                enabled: false
+            },
+            plotOptions: {
+                area: {
+                    fillColor: {
+                        linearGradient: {
+                            x1: 0,
+                            y1: 0,
+                            x2: 0,
+                            y2: 1
+                        },
+                        stops: [
+                            [0, Highcharts.getOptions().colors[0]],
+                            [1, Highcharts.color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+                        ]
+                    },
+                    marker: {
+                        radius: 2
+                    },
+                    lineWidth: 1,
+                    states: {
+                        hover: {
+                            lineWidth: 1
+                        }
+                    },
+                    threshold: null
+                }
+            },
+
+            series: [{
+                type: 'area',
+                name: 'Variation',
+                data: data
+            }]
+        });
+    }
+</script>
+</html>
